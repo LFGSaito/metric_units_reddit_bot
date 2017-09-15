@@ -1,107 +1,9 @@
 const rh = require('./regex_helper');
 
-function mpgToLper100km(i) {
-  return 235.215 / i;
-}
-
-function milesToKm(i) {
-  return i * 1.609344;
-}
-
-function feetToMetres(i) {
-  return i * 0.3048;
-}
-
-function inchesToCm(i) {
-  return i * 2.54;
-}
-
-function lbToKg(i) {
-  return i * 0.453592;
-}
-
-function fahrenheitToCelsius(i) {
-  return (i - 32) * 5/9;
-}
-
-//-----------------------------------
-
-function isNotHyperbole(i) {
-  return i.toString().match(/^100+(?:\.0+)?$/) === null;
-}
-
-function roundToDecimalPlaces(number, places) {
-  const multiplier = Math.pow(10, places);
-  return (Math.round(number * multiplier)/multiplier).toFixed(places);
-}
-
-//Problems rounding negative numbers
-function round(input, allowableErrorPercent) {
-  let multiplier;
-
-  if (input.toString().split('.').length > 1) {
-    multiplier = Math.pow(10, input.toString().split('.')[1].length)
-  } else {
-    multiplier = 1;
-  }
-
-  const nonDecimalInput = input * multiplier;
-
-  const digits = nonDecimalInput.toString().length;
-
-  let output;
-  let unroundedDigits = 1;
-  do {
-    const roundingMultipler = Math.pow(10, digits-unroundedDigits)
-    output = Math.round(nonDecimalInput/roundingMultipler) * roundingMultipler;
-    unroundedDigits++;
-  } while(Math.abs(output - nonDecimalInput)/nonDecimalInput * 100 > allowableErrorPercent);
-
-  return output/multiplier;
-}
-
-function currRound(percent) {
-  return (input) => round(input, percent);
-}
-
-function userFacingValue(input, conversionFunction, roundingFunction) {
-  input = input.toString();
-
-  let value;
-
-  if (conversionFunction) {
-    value = roundingFunction(conversionFunction(input));
-  } else {
-    value = input;
-  }
-
-  return rh.addCommas(value);
-}
-
-function userFacingValueAndUnit(i, unit, conversionFunction, roundingFunction) {
-  return userFacingValue(i, conversionFunction, roundingFunction) + unit;
-}
-
-function userFacingValueAndUnitRange(i, j, unit, conversionFunction, roundingFunction) {
-  const iConverted = userFacingValue(i, conversionFunction, roundingFunction);
-  const jConverted = userFacingValue(j, conversionFunction, roundingFunction);
-  if (iConverted === jConverted) {
-    return iConverted + unit
-  } else {
-    return iConverted
-    + " to "
-    + jConverted
-    + unit;
-  }
-}
-
-function convertDecimalFeetToFeetAndInches(i) {
-  return Math.floor(i).toString() + "'" + roundToDecimalPlaces(i%1 * 12, 0) + "\"";
-}
-
-const unitsLookupMap = [
- {
-    "unitRegex" : rh.regexJoinToString([/mpg/, /miles per gal(?:lon)?/]),
+const unitLookupList = [
+  {
+    "inputUnits" : [/mpg/, /miles per gal(?:lon)?/],
+    "standardInputUnit" : " mpg (US)",
     "shouldConvert" : (i) => isNotHyperbole(i) && i >= 10 && i < 235,
     "inDisplay" : (i) => userFacingValueAndUnit(i, " mpg (US)"),
     "inDisplayRange" : (i, j) => userFacingValueAndUnitRange(i, j, " mpg (US)"),
@@ -113,7 +15,8 @@ const unitsLookupMap = [
                          "britain", "british", "england", "scotland", "wales", "uk"]
   },
   {
-    "unitRegex" : rh.regexJoinToString([/mph/, /miles (?:an|per) hour/]),
+    "inputUnits" : [/mph/, /miles (?:an|per) hour/],
+    "standardInputUnit" : " mph",
     "shouldConvert" : (i) => isNotHyperbole(i) && i > 0 && [1, 10, 60, 88].indexOf(i) === -1,
     "inDisplay" : (i) => userFacingValueAndUnit(i, " mph"),
     "inDisplayRange" : (i, j) => userFacingValueAndUnitRange(i, j, " mph"),
@@ -122,7 +25,8 @@ const unitsLookupMap = [
     "ignoredKeywords" : ["britain", "british", "england", "scotland", "wales", "uk"]
   },
   {
-    "unitRegex" : rh.regexJoinToString([/-?feet/, /-ft/, /-?foot/]),
+    "inputUnits" : [/-?feet/, /-ft/, /-?foot/],
+    "standardInputUnit" : " feet",
     "weakUnitsRegex" : rh.regexJoinToString([/[']/, /ft/]),
     "shouldConvert" : (i) => isNotHyperbole(i) && i > 0 && [1, 2, 4, 6].indexOf(i) === -1 && !(i > 4 && i < 8),
     "inDisplay" : (i) => {
@@ -158,7 +62,8 @@ const unitsLookupMap = [
             .replace(/[^\d\.]/,'')
             .length <= 2
         if (inchesLessThan12 && inchesLessThan3CharactersBeforeDecimal) {
-          return " " + roundToDecimalPlaces(Number(feet) + Number(inches)/12, 2) + " feet ";
+          const feetNumeral = roundToDecimalPlaces(Number(feet.replace(/[^\d-\.]/g, '')) + Number(inches)/12, 2);
+          return " " + feetNumeral + " feet ";
         } else {
           return "  ";
         }
@@ -167,7 +72,8 @@ const unitsLookupMap = [
     "ignoredKeywords" : ["size"]
   },
   {
-    "unitRegex" : rh.regexJoinToString([/-in/, /-?inch/, /inches/]),
+    "inputUnits" : [/-in/, /-?inch/, /inches/],
+    "standardInputUnit" : "inches",
     "weakUnitsRegex" : rh.regexJoinToString([/["]/, /''/]),
     "shouldConvert" : (i) => isNotHyperbole(i) && i > 0 && i != 1,
     "inDisplay" : (i) => userFacingValueAndUnit(i, " inches"),
@@ -181,7 +87,8 @@ const unitsLookupMap = [
                         "rgb", "hz"]
   },
   {
-    "unitRegex" : "-?lbs?",
+    "inputUnits" : "-?lbs?",
+    "standardInputUnit" : " lb",
     "weakUnitsRegex" : rh.regexJoinToString([/-?pound/, /pounds/]),
     "shouldConvert" : (i) => isNotHyperbole(i) && i > 0,
     "inDisplay" : (i) => userFacingValueAndUnit(i, " lb"),
@@ -190,7 +97,8 @@ const unitsLookupMap = [
     "outDisplayRange" : (i, j) => userFacingValueAndUnitRange(i, j, " kg", lbToKg, currRound(5)),
   },
   {
-    "unitRegex" : rh.regexJoinToString([/mi/, /-?miles?/]),
+    "inputUnits" : [/mi/, /-?miles?/],
+    "standardInputUnit" : " miles",
     "shouldConvert" : (i) => isNotHyperbole(i) && i > 0 && [1, 8, 10].indexOf(i) === -1,
     "inDisplay" : (i) => userFacingValueAndUnit(i, " miles"),
     "inDisplayRange" : (i, j) => userFacingValueAndUnitRange(i, j, " miles"),
@@ -202,33 +110,52 @@ const unitsLookupMap = [
                          "italy", "italian", "croatia", "brasil", "brazil"]
   },
   {
-    "unitRegex" : rh.regexJoinToString([
-                    /(?:°|-?degrees?) ?(?:f|fahrenheit)/,
-                    /fahrenheit/
-                  ]),
+    "inputUnits" : [/(?:°|-?degrees?) ?(?:f|fahrenheit)/, /fahrenheit/],
+    "standardInputUnit" : "°F",
     "inDisplay" : (i) => userFacingValueAndUnit(i, "°F"),
     "inDisplayRange" : (i, j) => userFacingValueAndUnitRange(i, j, "°F"),
     "outDisplay" : (i) => userFacingValueAndUnit(i, "°C", fahrenheitToCelsius, Math.round),
     "outDisplayRange" : (i, j) => userFacingValueAndUnitRange(i, j, "°C", fahrenheitToCelsius, Math.round)
   }
-];
+]
 
-const globalIgnore = ["kill", "suicide", "death", "die", "depression", "crisis", "emergency", "therapy", "therapist", "murder", "rip", "rest in peace", "fatal",
+function roundToDecimalPlaces(number, places) {
+  const multiplier = Math.pow(10, places);
+  return (Math.round(number * multiplier)/multiplier).toFixed(places);
+}
 
-                      "america", "usa", "united states",
+function findPotentialConversions(input) {
+  const processedInput = unitLookupList.reduce((memo, map) => {
+    if (map["preprocess"]) {
+      return map["preprocess"](input);
+    } else {
+      return memo;
+    }
+  }, input)
+  
+  return unitLookupList.reduce((memo, map) => {
+    const numberAndUnitRegex = new RegExp(rh.startRegex
+                  + rh.numberRegex 
+                  + "(?= ?" 
+                    + rh.regexJoinToString(map['inputUnits'])
+                    + rh.endRegex
+                  + ")"
+                , 'gi');
+    const matches = processedInput.match(numberAndUnitRegex);
+    if (matches) {
+      matches
+        .map(match => match.replace(/[^\d-\.]/g, ''))
+        .forEach(match => {
+          memo.push({
+            "inputNumber" : match, 
+            "inputUnit" : map["standardInputUnit"]
+          })
+        });
+    }
+    return memo;
+  }, []);
+}
 
-                      "dick", "penis", "dong", "cock", "member", "phallus", "wood", "willy", "pecker", "manhood", "boner", "junk", "wiener", "shaft", "dildo",
-                      "genitalia", "clit", "labia", "pussy", "vagina", "snatch",
-                      "ass", "anus", "anal", "butt", "tit", "kink", "bdsm", "blow job", "jizz", "cum",
-                      "nsfw", "gonewild", "sex", "glory hole", "cuck", "porn", "incest", "piv", "milf"]
 module.exports = {
-  "unitsLookupMap" : unitsLookupMap.reduce((memo, map) => {
-                              if (map['ignoredKeywords']) {
-                                map['ignoredKeywords'] = map['ignoredKeywords'].concat(globalIgnore);
-                              } else {
-                                map['ignoredKeywords'] = globalIgnore;
-                              }
-                              memo.push(map);
-                              return memo;
-                           }, [])
+  "findPotentialConversions" : findPotentialConversions
 }
